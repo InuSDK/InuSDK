@@ -1,4 +1,4 @@
-module InuSDK
+module github.com/InuSDK/InuSDK
 
 go 1.26.3
 

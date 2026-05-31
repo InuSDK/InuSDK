@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"InuSDK/internal/candidate"
-	"InuSDK/internal/prompt"
 	"fmt"
 	"os"
+
+	"github.com/InuSDK/InuSDK/internal/candidate"
+	"github.com/InuSDK/InuSDK/internal/prompt"
 
 	"github.com/spf13/cobra"
 )
@@ -86,5 +87,5 @@ func init() {
 	rootCmd.AddCommand(uninstallCmd)
 
 	uninstallCmd.Flags().BoolVar(&uninstallAll, "all", false, "Remove all installed versions")
-	uninstallCmd.Flags().BoolVar(&uninstallForce, "force", false, "Skip confirmation prompt, useful for scripting ; by default it runs 'yes' option")
+	uninstallCmd.Flags().BoolVar(&uninstallForce, "force", false, "Skip confirmation prompt, useful for scripting ; by default is set to false")
 }

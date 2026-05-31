@@ -1,14 +1,12 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
-	"InuSDK/internal/prompt"
-	"InuSDK/internal/setup"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/InuSDK/InuSDK/internal/prompt"
+	"github.com/InuSDK/InuSDK/internal/setup"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

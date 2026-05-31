@@ -1,12 +1,13 @@
 package main
 
 import (
-	"InuSDK/internal/manifest"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/InuSDK/InuSDK/internal/manifest"
 )
 
 type AdoptiumAsset struct {

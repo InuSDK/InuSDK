@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"InuSDK/internal/setup"
+	"github.com/InuSDK/InuSDK/internal/setup"
 
 	"github.com/spf13/cobra"
 )

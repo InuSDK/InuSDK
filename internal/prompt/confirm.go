@@ -10,10 +10,13 @@ import (
 var reader = bufio.NewReader(os.Stdin)
 
 func Confirm(message string) bool {
-	fmt.Printf("%s [y/N]: ", message)
+	fmt.Printf("%s [y/N]: (Default: y)", message)
 
 	answer, _ := reader.ReadString('\n')
 	answer = strings.TrimSpace(strings.ToLower(answer))
 
-	return answer == "y"
+	if answer == "y" || answer == "" {
+		return true
+	}
+	return false
 }
