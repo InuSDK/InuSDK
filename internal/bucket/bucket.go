@@ -15,6 +15,28 @@ type Bucket struct {
 	URL  string
 }
 
+func ListSDKs(_bucket Bucket) ([]string, error) {
+	// Fetch the bucke tindex
+	url := fmt.Sprintf("%s/index.json", _bucket.URL)
+	resp, err := http.Get(url)
+
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("Could not fetch SDK list from bucket '%s'", _bucket.Name)
+	}
+
+	var sdks []string
+	if err := json.NewDecoder(resp.Body).Decode(&sdks); err != nil {
+		return nil, err
+	}
+
+	return sdks, nil
+}
+
 func GetBuckets() []Bucket {
 	var buckets []Bucket
 	viper.UnmarshalKey("buckets", &buckets)
