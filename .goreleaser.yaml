@@ -23,5 +23,5 @@ archives:
 
 release:
    github:
-      owner: InuzDev
+      owner: InuSDK
       name: inusdk
