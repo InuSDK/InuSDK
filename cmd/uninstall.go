@@ -1,34 +1,91 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
 	"fmt"
+	"os"
+
+	"github.com/InuSDK/InuSDK/internal/candidate"
+	"github.com/InuSDK/InuSDK/internal/prompt"
 
 	"github.com/spf13/cobra"
 )
 
+var uninstallAll bool
+var uninstallForce bool
+
 // uninstallCmd represents the uninstall command
 var uninstallCmd = &cobra.Command{
-	Use:   "uninstall",
-	Short: "Uninstall InuSDK",
-	Long:  `Delete ONLY the SDK manager, any SDK installed via this way wont be affected, yet they are at your own management.`,
+	Use:   "uninstall <sdk> [version]",
+	Short: "Uninstall an SDK version",
+	Long: `Remove an existing Software Development Kit, you can specify the version [--sdkversion <version>] or remove them all [--all]
+			  If there any SDK in use, need to use [--all --force]`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("uninstall called")
+		sdk := args[0]
+
+		// --all flag
+		if uninstallAll {
+			versions, err := candidate.InstalledVersions(sdk)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+				os.Exit(1)
+			}
+			if len(versions) == 0 {
+				fmt.Printf("no versions of %s installed.\n", sdk)
+				return
+			}
+
+			if !uninstallForce && !prompt.Confirm(fmt.Sprintf("About to delete ALL versions of %s. Continue?", sdk)) {
+				fmt.Println("Cancelled")
+				return
+			}
+
+			for _, _version := range versions {
+				if err := candidate.DeleteVersion(sdk, _version); err != nil {
+					fmt.Fprintf(os.Stderr, "Error deleting %s: %s\n", _version, err)
+					continue
+				}
+				fmt.Printf("Succesfully removed %s ; %s\n", sdk, _version)
+			}
+			return
+		}
+
+		// Specific version
+		var version string
+		if len(args) == 2 {
+			version = args[1]
+		} else {
+			// Default to latest installed version
+			latest, err := candidate.LatestInstalled(sdk)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+				os.Exit(1)
+			}
+			version = latest
+		}
+
+		// Warn the user if it is active
+		active, _ := candidate.ActiveVersion(sdk)
+		if active == version {
+			fmt.Printf("Warning: %s ; %s is currently active.\n", sdk, version)
+		}
+
+		if !uninstallForce && !prompt.Confirm(fmt.Sprintf("About to delete %s ; %s. Continue?", sdk, version)) {
+			fmt.Println("Cancelled")
+			return
+		}
+
+		if err := candidate.DeleteVersion(sdk, version); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Succesfully removed %s ; %s\n", sdk, version)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(uninstallCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// uninstallCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// uninstallCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	uninstallCmd.Flags().BoolVar(&uninstallAll, "all", false, "Remove all installed versions")
+	uninstallCmd.Flags().BoolVar(&uninstallForce, "force", false, "Skip confirmation prompt, useful for scripting ; by default is set to false")
 }

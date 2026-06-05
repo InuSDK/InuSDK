@@ -1,12 +1,10 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
-	"InuSDK/internal/setup"
 	"fmt"
 	"os"
+
+	"github.com/InuSDK/InuSDK/internal/setup"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -46,7 +44,7 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (Default: $HOME/.InuSDK/config.yaml")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (Default: $HOME/.InuSDK/config.yaml)")
 }
 
 func initConfig() {

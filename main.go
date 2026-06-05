@@ -1,10 +1,6 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-
-*/
 package main
 
-import "InuSDK/cmd"
+import "github.com/InuSDK/InuSDK/cmd"
 
 func main() {
 	cmd.Execute()

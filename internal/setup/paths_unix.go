@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func removeFromPath(oldBaseDir string) error {
+func RemoveFromPath(oldBaseDir string) error {
 	shellConfig := resolveShellConfig()
 	if shellConfig == "" {
 		return nil

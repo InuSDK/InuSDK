@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-func removeFromPath(oldBaseDir string) error {
+func RemoveFromPath(oldBaseDir string) error {
 	key, err := registry.OpenKey(
 		registry.CURRENT_USER,
 		`Environment`,

@@ -1,3 +1,5 @@
+# Require to make a bash script
+
 $shimsDir = "$env:USERPROFILE\.inusdk\shims"
 
 Write-Host "Building InuSDK. . ."

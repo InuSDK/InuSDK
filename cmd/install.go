@@ -1,11 +1,13 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-
-*/
 package cmd
 
 import (
 	"fmt"
+	"os"
+	"runtime"
+
+	"github.com/InuSDK/InuSDK/internal/bucket"
+	"github.com/InuSDK/InuSDK/internal/candidate"
+	"github.com/InuSDK/InuSDK/internal/prompt"
 
 	"github.com/spf13/cobra"
 )
@@ -13,28 +15,71 @@ import (
 // installCmd represents the install command
 var installCmd = &cobra.Command{
 	Use:   "install",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Install an SDK",
+	Long:  `Command to install an SDK, by default it install the latest compatible version, but can specify the version using --sdkversion`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("install called")
+		sdk := args[0]
+		version := ""
+
+		if len(args) == 2 {
+			version = args[1]
+		}
+
+		fmt.Printf("Fetching manifest for %s. . .\n", sdk)
+		_manifest, err := bucket.FetchManifest(sdk)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			os.Exit(1)
+		}
+
+		// Resolve the specified version
+		if version == "" {
+			latest, err := bucket.LatestVersion(_manifest)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("No version specified, installing latest version: %s\n", latest)
+			version = latest
+		}
+
+		// Check if already installed
+		versions, _ := candidate.InstalledVersions(sdk)
+		for _, _version := range versions {
+			if _version == version {
+				if !prompt.Confirm(fmt.Sprintf("%s %s is already installed. Reinstall?", sdk, version)) {
+					fmt.Println("Cancelled.")
+					return
+				}
+				break
+			}
+		}
+
+		// Resolve platform build
+		goos := runtime.GOOS
+		goarch := runtime.GOARCH
+		build, err := _manifest.Resolve(version, goos, goarch)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: no build available for %s/%s: %s\n", goos, goarch, err)
+			os.Exit(1)
+		}
+
+		if !prompt.Confirm(fmt.Sprintf("About to install %s %s. Continue?", sdk, version)) {
+			fmt.Println("Cancelled.")
+			return
+		}
+
+		// Install the SDK
+		if err := candidate.Install(sdk, version, build.URL, build.Checksum, build.Bin); err != nil {
+			fmt.Fprintf(os.Stderr, "Installation failed %s\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("\n%s %s installed successfully\n", sdk, version)
+		fmt.Printf("Run `inusdk use %s to activate it in any project", sdk)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(installCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// installCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// installCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

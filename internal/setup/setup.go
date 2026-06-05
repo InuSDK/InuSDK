@@ -16,6 +16,11 @@ type Config struct {
 	Language string `mapstructure:"language"`
 }
 
+type BucketConfig struct {
+	Name string `mapstructure:"name" yaml:"name"`
+	URL  string `mapstructure:"url" yaml:"url"`
+}
+
 var reader = bufio.NewReader(os.Stdin)
 
 // function to execute the setup wizard
@@ -23,7 +28,7 @@ func Run(isReset bool) error {
 	if isReset {
 		fmt.Println("Warning: This will reset all InuSDK configuraiton")
 		fmt.Println("Installed SDKs will not be deleted, only the configuration will be resetted to default")
-
+		home, _ := os.UserHomeDir()
 		oldBaseDir := viper.GetString("base_dir")
 
 		fmt.Println("Proceed with reset? [y/N]")
@@ -47,8 +52,51 @@ func Run(isReset bool) error {
 			if sdkChoice == "2" {
 				fmt.Printf("\nDeleting %s...\n", oldBaseDir)
 
-				if err := os.RemoveAll(oldBaseDir); err != nil {
+				entries, err := os.ReadDir(oldBaseDir)
+				if err != nil {
 					return fmt.Errorf("Could not delete old base directory: %s\n", err)
+				}
+
+				hasErrors := false
+				for _, entry := range entries {
+					path := filepath.Join(oldBaseDir, entry.Name())
+
+					if entry.Name() == "shims" && entry.IsDir() {
+						shimEntries, err := os.ReadDir(path)
+						if err != nil {
+							continue
+						}
+						for _, shimEntry := range shimEntries {
+							if shimEntry.Name() == "inusdk.exe" || shimEntry.Name() == "inusdk" {
+								continue
+							}
+							shimPath := filepath.Join(path, shimEntry.Name())
+							if err := os.RemoveAll(shimPath); err != nil {
+								fmt.Fprintf(os.Stderr, "Caution: could not delete %s: %s\n", shimEntry.Name(), err)
+								hasErrors = true
+							}
+						}
+						continue
+					}
+
+					// Skip binary at root level
+					if entry.Name() == "inusdk.exe" || entry.Name() == "inusdk" {
+						continue
+					}
+
+					if err := os.RemoveAll(path); err != nil {
+						fmt.Fprintf(os.Stderr, "Caution: could not delete %s: %s\n", entry.Name(), err)
+						hasErrors = true
+					}
+				}
+
+				configFile := filepath.Join(home, ".inusdk", "config.yaml")
+				os.Remove(configFile)
+
+				if !hasErrors {
+					fmt.Println("Old directory cleaned.")
+				} else {
+					fmt.Println("Some files could not be deleted, continuing anyway.")
 				}
 
 				fmt.Println("Old directory removed")
@@ -56,7 +104,7 @@ func Run(isReset bool) error {
 				fmt.Printf("Keeping existing SDKs at %s\n", oldBaseDir)
 			}
 
-			if err := removeFromPath(oldBaseDir); err != nil {
+			if err := RemoveFromPath(oldBaseDir); err != nil {
 				fmt.Printf("Could not remove old PATH entry: %s\n", err)
 			}
 		}
@@ -123,8 +171,6 @@ func buildDirOptions(home string) []string {
 }
 
 func promptBaseDir(options []string) (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-
 	fmt.Print("Where should InuSDK store SDKs?\n")
 
 	for index, options := range options {
@@ -220,6 +266,12 @@ func writeConfig(BaseDir, home string) error {
 	viper.Set("language", detectLanguage())
 	viper.Set("os", runtime.GOOS)
 
+	viper.Set("buckets", []map[string]string{
+		{
+			"name": "main",
+			"url":  "https://raw.githubusercontent.com/InuSDK/inusdk-bucket/master/manifests",
+		},
+	})
 	viper.SetConfigFile(filepath.Join(configDir, "config.yaml"))
 
 	return viper.WriteConfig()

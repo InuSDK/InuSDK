@@ -1,40 +1,86 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-
-*/
 package cmd
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/InuSDK/InuSDK/internal/candidate"
+	"github.com/InuSDK/InuSDK/internal/prompt"
+	"github.com/InuSDK/InuSDK/internal/shim"
 	"github.com/spf13/cobra"
 )
 
+var useForce bool
+
 // useCmd represents the use command
 var useCmd = &cobra.Command{
-	Use:   "use",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:   "use <sdk> [version]",
+	Short: "Use an specific SDK for a project",
+	Long:  `Select the SDK and the version [--sdkversion] for a specific project. Can set a default SDK using [--default <default SDK>]`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("use called")
+		sdk := args[0]
+		version := ""
+
+		if len(args) == 2 {
+			version = args[1]
+		}
+
+		// Resolve version
+		if version == "" {
+			latest, err := candidate.LatestInstalled(sdk)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+				os.Exit(1)
+			}
+			version = latest
+			fmt.Printf("Caution: No version specified, activating latest: %s\n", version)
+		} else {
+			// check if version is installed
+			versions, _ := candidate.InstalledVersions(sdk)
+			installed := false
+			for _, _version := range versions {
+				if _version == version {
+					installed = true
+					break
+				}
+			}
+
+			// Not installed - offer to install it
+			if !installed {
+				if !prompt.Confirm(fmt.Sprintf("%s %s is not installed. Install it ?", sdk, version)) {
+					fmt.Println("Cancelled.")
+					return
+				}
+
+				// Redirect to install flow
+				fmt.Printf("Run `inusdk install %s %s` to install it first.\n", sdk, version)
+				return
+			}
+		}
+
+		// confirm if the user wants to actually use it, if --force enabled, no confirmation required.
+		if !useForce && !prompt.Confirm(fmt.Sprintf("Activate %s %s", sdk, version)) {
+			fmt.Println("Cancelled")
+			return
+		}
+
+		// Set active
+		if err := candidate.SetActive(sdk, version); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+			os.Exit(1)
+		}
+
+		// Create shim
+		if err := shim.Create(sdk, version); err != nil {
+			fmt.Fprintf(os.Stderr, "Could not create shim: %s\n", err)
+		}
+
+		fmt.Printf("\nNow using %s %s\n", sdk, version)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(useCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// useCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// useCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	useCmd.Flags().BoolVar(&useForce, "force", false, "Skip confirmation prompt, useful for scripting ; by default is set to false.")
 }

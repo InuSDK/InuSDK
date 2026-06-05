@@ -1,8 +1,9 @@
-module InuSDK
+module github.com/InuSDK/InuSDK
 
 go 1.26.3
 
 require (
+	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
