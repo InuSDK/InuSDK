@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/InuSDK/InuSDK/internal/bucket"
 	"github.com/InuSDK/InuSDK/internal/candidate"
@@ -40,6 +41,14 @@ var installCmd = &cobra.Command{
 				os.Exit(1)
 			}
 			fmt.Printf("No version specified, installing latest version: %s\n", latest)
+			version = latest
+		} else if isMajorOnly(version) {
+			latest, err := bucket.LatestVersionForMajor(_manifest, version)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Only major version specified, installing latest: %s\n", latest)
 			version = latest
 		}
 
@@ -78,6 +87,11 @@ var installCmd = &cobra.Command{
 		fmt.Printf("\n%s %s installed successfully\n", sdk, version)
 		fmt.Printf("Run `inusdk use %s to activate it in any project", sdk)
 	},
+}
+
+func isMajorOnly(version string) bool {
+	parts := strings.Split(version, ".")
+	return len(parts) <= 2
 }
 
 func init() {

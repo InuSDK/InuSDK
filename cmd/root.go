@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/InuSDK/InuSDK/internal/setup"
 
@@ -48,6 +49,14 @@ func init() {
 }
 
 func initConfig() {
+	home, err := os.UserHomeDir()
+	cobra.CheckErr(err)
+
+	configPath := filepath.Join(home, ".inusdk", "config.yaml")
+
+	viper.SetConfigFile(configPath)
+	viper.AutomaticEnv()
+
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
