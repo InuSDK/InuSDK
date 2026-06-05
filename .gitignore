@@ -24,3 +24,6 @@ Thumbs.db
 
 # Go
 vendor/
+
+# Temporary making it hide (too lazy to make it a buld process)
+*.tar.gz
