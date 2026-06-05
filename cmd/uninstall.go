@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/InuSDK/InuSDK/internal/candidate"
 	"github.com/InuSDK/InuSDK/internal/prompt"
@@ -21,6 +22,11 @@ var uninstallCmd = &cobra.Command{
 			  If there any SDK in use, need to use [--all --force]`,
 	Run: func(cmd *cobra.Command, args []string) {
 		sdk := args[0]
+
+		if len(args) == 1 && strings.Contains(args[0], ".") {
+			fmt.Fprintf(os.Stderr, "Error: missing SDK name. Did you mean `inusdk uninstall <sdk> %s`?", args[0])
+			os.Exit(1)
+		}
 
 		// --all flag
 		if uninstallAll {

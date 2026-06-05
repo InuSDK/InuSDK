@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/InuSDK/InuSDK/internal/manifest"
 
@@ -37,8 +38,32 @@ func ListSDKs(_bucket Bucket) ([]string, error) {
 	return sdks, nil
 }
 
+func LatestVersionForMajor(_manifest *manifest.Manifest, major string) (string, error) {
+	var latest string
+
+	for version := range _manifest.Versions {
+		if !strings.HasPrefix(version, major+".") {
+			continue
+		}
+		if latest == "" {
+			latest = version
+			continue
+		}
+		if compareSemver(version, latest) > 0 {
+			latest = version
+		}
+	}
+
+	if latest == "" {
+		return "", fmt.Errorf("No versions found for major %s", major)
+	}
+
+	return latest, nil
+}
+
 func GetBuckets() []Bucket {
 	var buckets []Bucket
+
 	viper.UnmarshalKey("buckets", &buckets)
 	return buckets
 }
