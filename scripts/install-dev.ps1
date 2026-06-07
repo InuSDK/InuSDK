@@ -2,7 +2,7 @@
 
 $shimsDir = "$env:USERPROFILE\.inusdk\shims"
 
-Write-Host "Building InuSDK. . ."
+Write-Host "Building InuSDK. . ." -ForegroundColor Magenta
 go build -o "build/inusdk.exe"
 
 if ($LASTEXITCODE -ne 0)
@@ -11,7 +11,7 @@ if ($LASTEXITCODE -ne 0)
    exit 1
 }
 
-Write-Host "Copying to shim"
+Write-Host "Copying to shim" -ForegroundColor Cyan
 Copy-Item "build/inusdk.exe" "$shimsDir\inusdk.exe" -Force
 
 Write-Host "Done - Run `inusdk` in a new terminal" -ForegroundColor Green

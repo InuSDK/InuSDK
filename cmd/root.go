@@ -57,16 +57,7 @@ func initConfig() {
 	viper.SetConfigFile(configPath)
 	viper.AutomaticEnv()
 
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
-
-		viper.AddConfigPath(home + "/.InuSDK")
-		viper.SetConfigType("yaml")
-		viper.SetConfigName("config")
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Fprintf(os.Stderr, "Config read error: %v\n", err)
 	}
-	viper.AutomaticEnv()
-	viper.ReadInConfig()
 }

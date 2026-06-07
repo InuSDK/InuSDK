@@ -23,11 +23,50 @@ func Create(sdk, version string) error {
 	return createUnixShim(sdk, version, baseDir, shimsDir)
 }
 
+func DetectConflicts(sdk string) []string {
+	var conflicts []string
+
+	pathEnv := os.Getenv("PATH")
+	entries := filepath.SplitList(pathEnv)
+
+	baseDir := viper.GetString("base_dir")
+	shimsDir := filepath.Join(baseDir, "shims")
+
+	shimFound := false
+	for _, entry := range entries {
+		if entry == shimsDir {
+			shimFound = true
+			continue
+		}
+
+		if shimFound {
+			continue
+		}
+
+		var binName string
+		if runtime.GOOS == "windows" {
+			binName = sdk + ".exe"
+		} else {
+			binName = sdk
+		}
+
+		binPath := filepath.Join(entry, binName)
+		if _, err := os.Stat(binPath); err == nil {
+			conflicts = append(conflicts, entry)
+		}
+	}
+
+	return conflicts
+}
+
 func createWindowsShim(sdk, version, baseDir, shimsDir string) error {
 	shimPath := filepath.Join(shimsDir, sdk+".cmd")
 	realBin := filepath.Join(baseDir, "candidates", sdk, version, getBinPath(sdk))
 	javaHome := filepath.Join(baseDir, "candidates", sdk, version)
-	content := fmt.Sprintf("@echo off\nset JAVA_HOME=%s\n\"%s\" %%*\n", javaHome, realBin)
+	content := fmt.Sprintf(
+		"@echo off\r\nset JAVA_HOME=%s\r\nset PATH=%%JAVA_HOME%%\\bin;%%PATH%%\r\n\"%s\" %%*\r\n",
+		javaHome, realBin,
+	)
 
 	return os.WriteFile(shimPath, []byte(content), 0644)
 }
