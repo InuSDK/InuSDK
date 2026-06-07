@@ -34,7 +34,7 @@ var useCmd = &cobra.Command{
 			}
 			version = latest
 			fmt.Printf("Caution: No version specified, activating latest: %s\n", version)
-		} else {
+		} else if IsMajorOnly(version) {
 			// check if version is installed
 			versions, _ := candidate.InstalledVersions(sdk)
 			installed := false
@@ -68,6 +68,17 @@ var useCmd = &cobra.Command{
 		if err := candidate.SetActive(sdk, version); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			os.Exit(1)
+		}
+
+		conflicts := shim.DetectConflicts(sdk)
+		if len(conflicts) > 0 {
+			fmt.Println("Warning: Found another installation ahead of InuSDK of PATH: ")
+			for _, conflict := range conflicts {
+				fmt.Printf(" - %s\n", conflict)
+			}
+
+			fmt.Println("These may override InuSDK's managed version")
+			fmt.Println("To fix ; remove them from your system path or uninstall conflicting versions")
 		}
 
 		// Create shim
