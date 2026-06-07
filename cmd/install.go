@@ -8,7 +8,7 @@ import (
 	"github.com/InuSDK/InuSDK/internal/bucket"
 	"github.com/InuSDK/InuSDK/internal/candidate"
 	"github.com/InuSDK/InuSDK/internal/prompt"
-
+	IsMajorOnly "github.com/InuSDK/InuSDK/internal/version" // FUCKING GOPLS WHATEVER THE FUCK SERVER NAME! I DON'T WANT TO FUCKING RENAME MY IMPORT! FUCKING PIEACE OF SHIT
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +41,7 @@ var installCmd = &cobra.Command{
 			}
 			fmt.Printf("No version specified, installing latest version: %s\n", latest)
 			version = latest
-		} else if IsMajorOnly(version) {
+		} else if IsMajorOnly.IsMajorOnly(version) {
 			latest, err := bucket.LatestVersionForMajor(_manifest, version)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)

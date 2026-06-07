@@ -7,6 +7,7 @@ import (
 	"github.com/InuSDK/InuSDK/internal/candidate"
 	"github.com/InuSDK/InuSDK/internal/prompt"
 	"github.com/InuSDK/InuSDK/internal/shim"
+	IsMajorOnly "github.com/InuSDK/InuSDK/internal/version" // FUCKING GOPLS WHATEVER THE FUCK SERVER NAME! I DON'T WANT TO FUCKING RENAME MY IMPORT! FUCKING PIEACE OF SHIT
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +35,7 @@ var useCmd = &cobra.Command{
 			}
 			version = latest
 			fmt.Printf("Caution: No version specified, activating latest: %s\n", version)
-		} else if IsMajorOnly(version) {
+		} else if IsMajorOnly.IsMajorOnly(version) {
 			// check if version is installed
 			versions, _ := candidate.InstalledVersions(sdk)
 			installed := false
