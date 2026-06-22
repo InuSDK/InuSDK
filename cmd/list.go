@@ -142,7 +142,7 @@ func listAvailableVersions(sdk string) {
 		if _version == active {
 			marker = "active"
 		}
-		fmt.Printf("    %s%s\n", _version, marker)
+		fmt.Printf("    %s %s\n", _version, marker)
 	}
 }
 

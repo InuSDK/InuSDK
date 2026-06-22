@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/InuSDK/InuSDK/internal/bucket"
 	"github.com/InuSDK/InuSDK/internal/candidate"
 	"github.com/InuSDK/InuSDK/internal/prompt"
 	"github.com/InuSDK/InuSDK/internal/shim"
@@ -21,6 +22,12 @@ var useCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		sdk := args[0]
 		version := ""
+
+		_manifest, err := bucket.FetchManifest(sdk)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting manifest: %s\n", err)
+			os.Exit(1)
+		}
 
 		if len(args) == 2 {
 			version = args[1]
@@ -45,6 +52,14 @@ var useCmd = &cobra.Command{
 					break
 				}
 			}
+
+			latest, err := bucket.LatestVersionForMajor(_manifest, version)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Only major version specified, using the latest patch: %s\n", latest)
+			version = latest
 
 			// Not installed - offer to install it
 			if !installed {
