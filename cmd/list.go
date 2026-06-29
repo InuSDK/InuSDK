@@ -26,7 +26,7 @@ var listCmd = &cobra.Command{
 				listAvailableVersions(args[0])
 			} else {
 				// inusdk list --available
-				listAvailableSDKs()
+				listAvailableSDKs() // This run when there is no bucket specified; showing the available SDKs buckets.
 			}
 			return
 		}
@@ -153,7 +153,7 @@ func listAvailableSDKs() {
 		return
 	}
 
-	fmt.Println("available SDKs:")
+	fmt.Print("available SDKs: <To check the available versions of an SDK, specify the SDK>\n   Example: inusdk --available java")
 	for _, _bucket := range buckets {
 		fmt.Printf("\n  Bucket: %s\n", _bucket.Name)
 		sdks, err := bucket.ListSDKs(_bucket)
