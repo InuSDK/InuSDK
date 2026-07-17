@@ -32,11 +32,11 @@ var listCmd = &cobra.Command{
 			return
 		}
 
-		// if listInstalled {
-		// 	if len(args) == 1 {
-		// 		listAllInstalled(args)
-		// 	}
-		// }
+		if listInstalled {
+			if len(args) == 1 {
+				listAllInstalled()
+			}
+		}
 
 		if len(args) == 1 {
 			// inusdk list java
