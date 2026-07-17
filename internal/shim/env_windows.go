@@ -26,3 +26,23 @@ func setEnv(key, value string) error {
 	defer _key.Close()
 	return _key.SetExpandStringValue(key, value)
 }
+
+func GetSystemJavaHome() string {
+	key, err := registry.OpenKey(
+		registry.LOCAL_MACHINE,
+		`SYSTEM\CurrentControlSet\Control\Session Manager\Environment`,
+		registry.QUERY_VALUE,
+	)
+	if err != nil {
+		return "CRIT-WARN: Unknown error reading registry"
+	}
+
+	defer key.Close()
+
+	val, _, err := key.GetStringValue("JAVA_HOME")
+	if err != nil {
+		return ""
+	}
+
+	return val
+}
