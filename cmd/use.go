@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/InuSDK/InuSDK/internal/bucket"
 	"github.com/InuSDK/InuSDK/internal/candidate"
@@ -86,23 +85,6 @@ var useCmd = &cobra.Command{
 		if err := candidate.SetActive(sdk, version); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 			os.Exit(1)
-		}
-
-		if sdk == "java" {
-			baseDir := viper.GetString("base_dir")
-			if err := shim.SetJavaHome(version, baseDir); err != nil {
-				fmt.Fprintf(os.Stderr, "Warn: Could not set JAVA_HOME: %s\n", err)
-			} else {
-				// Check for system level conflict
-				systemJavaHome := shim.GetSystemJavaHome()
-				javaHome := filepath.Join(baseDir, "candidates", "java", version)
-				if systemJavaHome != "" && systemJavaHome != javaHome {
-					fmt.Println("Warn: JAVA_HOME is set at system level by another program.")
-					fmt.Println("      Run the terminal as administrator and run `inusdk use java <version>` to override it")
-				} else {
-					fmt.Println("JAVA_HOME updated succesfully")
-				}
-			}
 		}
 
 		conflicts := shim.DetectConflicts(sdk)
