@@ -12,6 +12,7 @@ import (
 )
 
 var listAvailable bool
+var listInstalled bool
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
@@ -30,6 +31,12 @@ var listCmd = &cobra.Command{
 			}
 			return
 		}
+
+		// if listInstalled {
+		// 	if len(args) == 1 {
+		// 		listAllInstalled(args)
+		// 	}
+		// }
 
 		if len(args) == 1 {
 			// inusdk list java
@@ -197,5 +204,6 @@ func compareSemver(a, b string) int {
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+	listCmd.Flags().BoolVar(&listInstalled, "installed", false, "Show only installed SDKs")
 	listCmd.Flags().BoolVar(&listAvailable, "available", false, "Show available SDKs from bucket")
 }

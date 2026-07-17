@@ -9,18 +9,42 @@ import (
 	"github.com/spf13/viper"
 )
 
+var jdkBinaries = []string{
+	"java", "javac", "jar", "javap", "javadoc",
+	"jshell", "jlink", "jmod", "jimage", "jdeps",
+}
+
 func Create(sdk, version string) error {
 	baseDir := viper.GetString("base_dir")
 	shimsDir := filepath.Join(baseDir, "shims")
 
 	if err := os.MkdirAll(shimsDir, 0755); err != nil {
-		return fmt.Errorf("Could not create shims dir: %w", err)
+		return fmt.Errorf("Warn: Could not create shims dir: %w", err)
 	}
 
-	if runtime.GOOS == "windows" {
-		return createWindowsShim(sdk, version, baseDir, shimsDir)
+	binaries := resolveBinaries(sdk)
+	for _, bin := range binaries {
+		if runtime.GOOS == "windows" {
+			if err := createWindowsShim(bin, sdk, version, baseDir, shimsDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Warn: Could not create shims for %s: %s\n", bin, err)
+			}
+		} else {
+			if err := createUnixShim(bin, sdk, version, baseDir, shimsDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Warn: Could not create shim for %s: %s\n", bin, err)
+			}
+		}
 	}
-	return createUnixShim(sdk, version, baseDir, shimsDir)
+
+	return nil
+}
+
+func resolveBinaries(sdk string) []string {
+	switch sdk {
+	case "java":
+		return jdkBinaries
+	default:
+		return []string{sdk}
+	}
 }
 
 func DetectConflicts(sdk string) []string {
@@ -59,10 +83,17 @@ func DetectConflicts(sdk string) []string {
 	return conflicts
 }
 
-func createWindowsShim(sdk, version, baseDir, shimsDir string) error {
-	shimPath := filepath.Join(shimsDir, sdk+".cmd")
-	realBin := filepath.Join(baseDir, "candidates", sdk, version, getBinPath(sdk))
+func createWindowsShim(binary, sdk, version, baseDir, shimsDir string) error {
+	shimPath := filepath.Join(shimsDir, binary+".cmd")
 	javaHome := filepath.Join(baseDir, "candidates", sdk, version)
+
+	var realBin string
+	if binary == "java" || binary == "javaw" {
+		realBin = filepath.Join(javaHome, "bin", binary+".exe")
+	} else {
+		realBin = filepath.Join(javaHome, "bin", binary+".exe")
+	}
+
 	content := fmt.Sprintf(
 		"@echo off\r\nset JAVA_HOME=%s\r\nset PATH=%%JAVA_HOME%%\\bin;%%PATH%%\r\n\"%s\" %%*\r\n",
 		javaHome, realBin,
@@ -71,10 +102,12 @@ func createWindowsShim(sdk, version, baseDir, shimsDir string) error {
 	return os.WriteFile(shimPath, []byte(content), 0644)
 }
 
-func createUnixShim(sdk, version, baseDir, shimsDir string) error {
-	shimPath := filepath.Join(shimsDir, sdk)
-	realBin := filepath.Join(baseDir, "candidates", sdk, version, getBinPath(sdk))
-	content := fmt.Sprintf("#!/bin/sh\nexec \"%s\" \"$@\"\n", realBin)
+func createUnixShim(binary, sdk, version, baseDir, shimsDir string) error {
+	shimPath := filepath.Join(shimsDir, binary)
+	javaHome := filepath.Join(baseDir, "candidates", sdk, version)
+	realBin := filepath.Join(javaHome, "bin", binary)
+
+	content := fmt.Sprintf("#!/bin/sh\nexport JAVA_HOME=\"%s\"\nexec \"%s\" \"$@\"\n", javaHome, realBin)
 
 	if err := os.WriteFile(shimPath, []byte(content), 0755); err != nil {
 		return err
