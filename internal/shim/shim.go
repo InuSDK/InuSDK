@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/spf13/viper"
+	"golang.org/x/sys/windows/registry"
 )
 
 var jdkBinaries = []string{
@@ -83,6 +84,26 @@ func DetectConflicts(sdk string) []string {
 	return conflicts
 }
 
+func GetSystemJavaHome() string {
+	key, err := registry.OpenKey(
+		registry.LOCAL_MACHINE,
+		`SYSTEM\CurrentControlSet\Control\Session Manager\Environment`,
+		registry.QUERY_VALUE,
+	)
+	if err != nil {
+		return "CRIT-WARN: Unknown error reading registry"
+	}
+
+	defer key.Close()
+
+	val, _, err := key.GetStringValue("JAVA_HOME")
+	if err != nil {
+		return ""
+	}
+
+	return val
+}
+
 func createWindowsShim(binary, sdk, version, baseDir, shimsDir string) error {
 	shimPath := filepath.Join(shimsDir, binary+".cmd")
 	javaHome := filepath.Join(baseDir, "candidates", sdk, version)
@@ -114,6 +135,11 @@ func createUnixShim(binary, sdk, version, baseDir, shimsDir string) error {
 	}
 
 	return os.Chmod(shimPath, 0755)
+}
+
+func SetJavaHome(version, baseDir string) error {
+	javaHome := filepath.Join(baseDir, "candidates", "java", version)
+	return setEnv("JAVA_HOME", javaHome)
 }
 
 func getBinPath(sdk string) string {
