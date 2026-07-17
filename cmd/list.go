@@ -12,6 +12,7 @@ import (
 )
 
 var listAvailable bool
+var listInstalled bool
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
@@ -26,10 +27,16 @@ var listCmd = &cobra.Command{
 				listAvailableVersions(args[0])
 			} else {
 				// inusdk list --available
-				listAvailableSDKs()
+				listAvailableSDKs() // This run when there is no bucket specified; showing the available SDKs buckets.
 			}
 			return
 		}
+
+		// if listInstalled {
+		// 	if len(args) == 1 {
+		// 		listAllInstalled(args)
+		// 	}
+		// }
 
 		if len(args) == 1 {
 			// inusdk list java
@@ -142,7 +149,7 @@ func listAvailableVersions(sdk string) {
 		if _version == active {
 			marker = "active"
 		}
-		fmt.Printf("    %s%s\n", _version, marker)
+		fmt.Printf("    %s %s\n", _version, marker)
 	}
 }
 
@@ -153,7 +160,7 @@ func listAvailableSDKs() {
 		return
 	}
 
-	fmt.Println("available SDKs:")
+	fmt.Print("available SDKs: <To check the available versions of an SDK, specify the SDK>\n   Example: inusdk --available java")
 	for _, _bucket := range buckets {
 		fmt.Printf("\n  Bucket: %s\n", _bucket.Name)
 		sdks, err := bucket.ListSDKs(_bucket)
@@ -197,5 +204,6 @@ func compareSemver(a, b string) int {
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+	listCmd.Flags().BoolVar(&listInstalled, "installed", false, "Show only installed SDKs")
 	listCmd.Flags().BoolVar(&listAvailable, "available", false, "Show available SDKs from bucket")
 }
