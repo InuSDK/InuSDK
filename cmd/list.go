@@ -32,6 +32,7 @@ var listCmd = &cobra.Command{
 			return
 		}
 
+		// inusdk list --installed
 		if listInstalled {
 			if len(args) == 1 {
 				listAllInstalled()
