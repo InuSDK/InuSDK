@@ -42,13 +42,13 @@ var installCmd = &cobra.Command{
 			fmt.Printf("No version specified, installing latest version: %s\n", latest)
 			version = latest
 		} else if versionUtil.IsMajorOnly(version) {
-			latest, err := bucket.LatestVersionForMajor(_manifest, version)
+			SpecifiedMajorVersion, err := bucket.LatestVersionForMajor(_manifest, version)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)
 				os.Exit(1)
 			}
-			fmt.Printf("Only major version specified, installing latest: %s\n", latest)
-			version = latest
+			fmt.Printf("Only major version specified, installing latest: %s\n", SpecifiedMajorVersion)
+			version = SpecifiedMajorVersion
 		}
 
 		// Check if already installed
@@ -84,7 +84,7 @@ var installCmd = &cobra.Command{
 		}
 
 		fmt.Printf("\n%s %s installed successfully\n", sdk, version)
-		fmt.Printf("Run `inusdk use %s to activate it in any project", sdk)
+		fmt.Printf("Run `inusdk use %s` to activate it in any project", sdk)
 	},
 }
 

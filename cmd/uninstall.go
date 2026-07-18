@@ -7,6 +7,7 @@ import (
 
 	"github.com/InuSDK/InuSDK/internal/candidate"
 	"github.com/InuSDK/InuSDK/internal/prompt"
+	versionUtil "github.com/InuSDK/InuSDK/internal/version"
 
 	"github.com/spf13/cobra"
 )
@@ -59,14 +60,34 @@ var uninstallCmd = &cobra.Command{
 		var version string
 		if len(args) == 2 {
 			version = args[1]
-		} else {
-			// Default to latest installed version
-			latest, err := candidate.LatestInstalled(sdk)
+		}
+
+		// Resolve local version
+		if version == "" {
+			LocalLatest, err := candidate.LatestInstalled(sdk)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 				os.Exit(1)
 			}
-			version = latest
+			fmt.Printf("No specified version, uninstalled latest local version: %s\n", LocalLatest)
+			version = LocalLatest
+		} else if versionUtil.IsMajorOnly(version) {
+			versions, _ := candidate.InstalledVersions(sdk)
+			var LocalLatest string
+			for _, _version := range versions {
+				if strings.HasPrefix(_version, version+".") {
+					if LocalLatest == "" || compareSemver(_version, LocalLatest) > 0 {
+						LocalLatest = _version
+					}
+				}
+			}
+
+			if LocalLatest == "" {
+				fmt.Fprintf(os.Stderr, "Error: No installed versions founds for major %s\n", version)
+				os.Exit(1)
+			}
+			fmt.Printf("Major version specified, uninstalled version: %s\n", LocalLatest)
+			version = LocalLatest
 		}
 
 		// Warn the user if it is active
