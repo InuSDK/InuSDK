@@ -84,7 +84,7 @@ var installCmd = &cobra.Command{
 		}
 
 		fmt.Printf("\n%s %s installed successfully\n", sdk, version)
-		fmt.Printf("Run `inusdk use %s to activate it in any project", sdk)
+		fmt.Printf("Run `inusdk use %s` to activate it in any project", sdk)
 	},
 }
 

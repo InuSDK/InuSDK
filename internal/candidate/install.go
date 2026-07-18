@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/k0kubun/go-ansi"
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/viper"
 )
 
@@ -65,7 +68,29 @@ func download(url, destination string) error {
 	}
 	defer _file.Close()
 
-	_, err = io.Copy(_file, resp.Body)
+	bar := progressbar.NewOptions64(
+		resp.ContentLength,
+		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
+		progressbar.OptionSetDescription("   Downloading"),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetWidth(40),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Fprintln(os.Stderr)
+		}),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[magenta]=[reset]",
+			SaucerHead:    "[green]#[reset]",
+			SaucerPadding: " ",
+			BarStart:      "{",
+			BarEnd:        "}",
+		}),
+	)
+
+	_, err = io.Copy(io.MultiWriter(_file, bar), resp.Body)
 	return err
 }
 
@@ -102,13 +127,25 @@ func resolveExt(url string) string {
 }
 
 func extract(src, destination string) error {
+	bar := progressbar.NewOptions(
+		-1,
+		progressbar.OptionSetDescription("   Extracting "),
+		progressbar.OptionSpinnerType(14),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Println()
+		}),
+	)
+
+	bar.Add(1)
+	defer bar.Finish()
+
 	if strings.HasSuffix(src, ".zip") {
-		return extractZip(src, destination)
+		return extractZip(src, destination, bar)
 	}
-	return extractTarGz(src, destination)
+	return extractTarGz(src, destination, bar)
 }
 
-func extractZip(src, destination string) error {
+func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
 	fileReader, err := zip.OpenReader(src)
 	if err != nil {
 		return err
@@ -116,6 +153,7 @@ func extractZip(src, destination string) error {
 	defer fileReader.Close()
 
 	for _, _file := range fileReader.File {
+		bar.Add(1)
 		// strip top-level directoy from path
 		parts := strings.SplitN(_file.Name, "/", 2)
 		if len(parts) < 2 {
@@ -154,7 +192,7 @@ func extractZip(src, destination string) error {
 	return nil
 }
 
-func extractTarGz(src, destination string) error {
+func extractTarGz(src, destination string, bar *progressbar.ProgressBar) error {
 	_file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -179,6 +217,8 @@ func extractTarGz(src, destination string) error {
 		if err != nil {
 			return err
 		}
+
+		bar.Add(1)
 
 		parts := strings.SplitN(header.Name, "/", 2)
 		if len(parts) < 2 {
