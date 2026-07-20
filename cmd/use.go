@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/InuSDK/InuSDK/internal/bucket"
 	"github.com/InuSDK/InuSDK/internal/candidate"
@@ -45,6 +46,13 @@ var useCmd = &cobra.Command{
 			fmt.Printf("Caution: No version specified, activating latest: %s\n", version)
 		} else if versionUtil.IsMajorOnly(version) {
 			// check if version is installed
+			latest, err := candidate.LatestInstalled(sdk)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Only major version specified, using the latest patch: %s\n", latest)
+
 			versions, _ := candidate.InstalledVersions(sdk)
 			installed := false
 			for _, _version := range versions {
@@ -54,14 +62,6 @@ var useCmd = &cobra.Command{
 				}
 			}
 
-			latest, err := bucket.LatestVersionForMajor(_manifest, version)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)
-				os.Exit(1)
-			}
-			fmt.Printf("Only major version specified, using the latest patch: %s\n", latest)
-			version = latest
-
 			// Not installed - offer to install it
 			if !installed {
 				if !prompt.Confirm(fmt.Sprintf("%s %s is not installed. Install it ?", sdk, version)) {
@@ -69,9 +69,22 @@ var useCmd = &cobra.Command{
 					return
 				}
 
-				// Redirect to install flow
-				fmt.Printf("Run `inusdk install %s %s` to install it first.\n", sdk, version)
-				return
+				goos := runtime.GOOS
+				goarch := runtime.GOARCH
+				build, err := _manifest.Resolve(version, goos, goarch)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: no build avaiable for %s/%s: %s\n", goos, goarch, err)
+					os.Exit(1)
+				}
+
+				// Install directly
+				fmt.Printf("Installing %s %s. . .\n", sdk, version)
+				if err := candidate.Install(sdk, version, build.URL, build.Checksum, build.Bin); err != nil {
+					fmt.Fprintf(os.Stderr, "Installation failed: %s\n", err)
+					os.Exit(1)
+				}
+
+				fmt.Printf("Succesfully installed\nTo use run `inusdk use %s %s`", sdk, version)
 			}
 		}
 
