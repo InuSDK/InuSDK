@@ -18,9 +18,9 @@ var useForce bool
 
 // useCmd represents the use command
 var useCmd = &cobra.Command{
-	Use:   "use <sdk> [version]",
+	Use:   "use <sdk> <version>",
 	Short: "Use an specific SDK for a project",
-	Long:  `Select the SDK and the version [--sdkversion] for a specific project. Can set a default SDK using [--default <default SDK>]`,
+	Long:  `Select the SDK and the version by running "inusdk <sdk name> <sdk version>" for an specific SDK's version. If no version set, it will use the latest installed version`,
 	Run: func(cmd *cobra.Command, args []string) {
 		sdk := args[0]
 		version := ""
