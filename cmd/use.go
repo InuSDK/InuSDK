@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 
 	"github.com/InuSDK/InuSDK/internal/bucket"
 	"github.com/InuSDK/InuSDK/internal/candidate"
@@ -18,9 +19,9 @@ var useForce bool
 
 // useCmd represents the use command
 var useCmd = &cobra.Command{
-	Use:   "use <sdk> [version]",
+	Use:   "use <sdk> <version>",
 	Short: "Use an specific SDK for a project",
-	Long:  `Select the SDK and the version [--sdkversion] for a specific project. Can set a default SDK using [--default <default SDK>]`,
+	Long:  `Select the SDK and the version by running "inusdk <sdk name> <sdk version>" for an specific SDK's version. If no version set, it will use the latest installed version`,
 	Run: func(cmd *cobra.Command, args []string) {
 		sdk := args[0]
 		version := ""
@@ -46,21 +47,16 @@ var useCmd = &cobra.Command{
 			fmt.Printf("Caution: No version specified, activating latest: %s\n", version)
 		} else if versionUtil.IsMajorOnly(version) {
 			// check if version is installed
-			latest, err := candidate.LatestInstalled(sdk)
+			latest, err := bucket.LatestVersionForMajor(_manifest, version)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)
 				os.Exit(1)
 			}
 			fmt.Printf("Only major version specified, using the latest patch: %s\n", latest)
+			version = latest
 
 			versions, _ := candidate.InstalledVersions(sdk)
-			installed := false
-			for _, _version := range versions {
-				if _version == version {
-					installed = true
-					break
-				}
-			}
+			installed := slices.Contains(versions, version)
 
 			// Not installed - offer to install it
 			if !installed {
