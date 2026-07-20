@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 
 	"github.com/InuSDK/InuSDK/internal/bucket"
 	"github.com/InuSDK/InuSDK/internal/candidate"
@@ -46,21 +47,16 @@ var useCmd = &cobra.Command{
 			fmt.Printf("Caution: No version specified, activating latest: %s\n", version)
 		} else if versionUtil.IsMajorOnly(version) {
 			// check if version is installed
-			latest, err := candidate.LatestInstalled(sdk)
+			latest, err := bucket.LatestVersionForMajor(_manifest, version)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: no versions found for major %s: %s\n", version, err)
 				os.Exit(1)
 			}
 			fmt.Printf("Only major version specified, using the latest patch: %s\n", latest)
+			version = latest
 
 			versions, _ := candidate.InstalledVersions(sdk)
-			installed := false
-			for _, _version := range versions {
-				if _version == version {
-					installed = true
-					break
-				}
-			}
+			installed := slices.Contains(versions, version)
 
 			// Not installed - offer to install it
 			if !installed {
