@@ -14,6 +14,10 @@ var jdkBinaries = []string{
 	"jshell", "jlink", "jmod", "jimage", "jdeps",
 }
 
+var clangBinaries = []string{
+	"clang", "clang++", "clang-format", "clang-tidy", "lld", "lldb",
+}
+
 func Create(sdk, version string) error {
 	baseDir := viper.GetString("base_dir")
 	shimsDir := filepath.Join(baseDir, "shims")
@@ -42,6 +46,8 @@ func resolveBinaries(sdk string) []string {
 	switch sdk {
 	case "java":
 		return jdkBinaries
+	case "clang":
+		return clangBinaries
 	default:
 		return []string{sdk}
 	}

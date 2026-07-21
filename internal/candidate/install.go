@@ -17,6 +17,7 @@ import (
 	"github.com/k0kubun/go-ansi"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/viper"
+	"github.com/ulikunitz/xz"
 )
 
 func Install(sdk, version, url, checksum, binPath string) error {
@@ -139,10 +140,16 @@ func extract(src, destination string) error {
 	bar.Add(1)
 	defer bar.Finish()
 
-	if strings.HasSuffix(src, ".zip") {
+	switch {
+	case strings.HasSuffix(src, ".zip"):
 		return extractZip(src, destination, bar)
+	case strings.HasSuffix(src, ".tar.gz"):
+		return extractTarGz(src, destination, bar)
+	case strings.HasSuffix(src, ".tar.xz"):
+		return extractTarXz(src, destination, bar)
+	default:
+		return fmt.Errorf("Unsupported archive format: %s", src)
 	}
-	return extractTarGz(src, destination, bar)
 }
 
 func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
@@ -247,6 +254,60 @@ func extractTarGz(src, destination string, bar *progressbar.ProgressBar) error {
 			}
 
 			// Keep the executable permissions.
+			os.Chmod(target, os.FileMode(header.Mode))
+		}
+	}
+
+	return nil
+}
+
+func extractTarXz(src, dest string, bar *progressbar.ProgressBar) error {
+	file, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	xzReader, err := xz.NewReader(file)
+	if err != nil {
+		return err
+	}
+
+	tr := tar.NewReader(xzReader)
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		bar.Add(1)
+
+		parts := strings.SplitN(header.Name, "/", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		target := filepath.Join(dest, parts[1])
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			os.MkdirAll(target, 0755)
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				return err
+			}
+
+			out, err := os.Create(target)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(out, tr)
+			if err != nil {
+				return err
+			}
 			os.Chmod(target, os.FileMode(header.Mode))
 		}
 	}
