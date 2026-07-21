@@ -3,9 +3,11 @@ package candidate
 import (
 	"archive/tar"
 	"archive/zip"
+	"bufio"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"sync"
 
 	"fmt"
 	"io"
@@ -17,7 +19,13 @@ import (
 	"github.com/k0kubun/go-ansi"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/viper"
+	"github.com/ulikunitz/xz"
 )
+
+type extractJob struct {
+	header *tar.Header
+	data   []byte
+}
 
 func Install(sdk, version, url, checksum, binPath string) error {
 	baseDir := viper.GetString("base_dir")
@@ -120,10 +128,14 @@ func verifyChecksum(filePath, expected string) error {
 }
 
 func resolveExt(url string) string {
-	if strings.HasSuffix(url, ".zip") {
+	switch {
+	case strings.HasSuffix(url, ".zip"):
 		return ".zip"
+	case strings.HasSuffix(url, ".tar.xz"):
+		return ".tar.xz"
+	default:
+		return ".tar.gz"
 	}
-	return ".tar.gz"
 }
 
 func extract(src, destination string) error {
@@ -139,10 +151,16 @@ func extract(src, destination string) error {
 	bar.Add(1)
 	defer bar.Finish()
 
-	if strings.HasSuffix(src, ".zip") {
+	switch {
+	case strings.HasSuffix(src, ".zip"):
 		return extractZip(src, destination, bar)
+	case strings.HasSuffix(src, ".tar.gz"):
+		return extractTarGz(src, destination, bar)
+	case strings.HasSuffix(src, ".tar.xz"):
+		return extractTarXz(src, destination, bar)
+	default:
+		return fmt.Errorf("Unsupported archive format: %s", src)
 	}
-	return extractTarGz(src, destination, bar)
 }
 
 func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
@@ -252,4 +270,124 @@ func extractTarGz(src, destination string, bar *progressbar.ProgressBar) error {
 	}
 
 	return nil
+}
+
+func extractTarXz(src, dest string, bar *progressbar.ProgressBar) error {
+	file, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	xzReader, err := xz.NewReader(file)
+	if err != nil {
+		return err
+	}
+
+	tr := tar.NewReader(xzReader)
+
+	jobs := make(chan extractJob, 200)
+	errCh := make(chan error, 4)
+	var wg sync.WaitGroup
+
+	// We now make a worker pool, 4 goroutines writing files to disk concurrently
+	workerCount := 4
+	for ind := 0; ind < workerCount; ind++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				if err := writeExtractedFiles(job.header, job.data, dest); err != nil {
+					select {
+					case errCh <- err:
+					default:
+					}
+				}
+			}
+		}()
+	}
+
+	count := 0
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		count++
+		if count%50 == 0 {
+			bar.Add(50)
+		}
+
+		if header.Typeflag == tar.TypeDir {
+			parts := strings.SplitN(header.Name, "/", 2)
+			if len(parts) < 2 {
+				continue
+			}
+			target := filepath.Join(dest, parts[1])
+			os.MkdirAll(target, 0755)
+			continue
+		}
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		// We now read file content into memory, this must be sequential, since tr is a single sequential reader.
+		data := make([]byte, header.Size)
+		if _, err := io.ReadFull(tr, data); err != nil {
+			close(jobs)
+			wg.Wait()
+			return err
+		}
+
+		select {
+		case jobs <- extractJob{header: header, data: data}:
+		case err := <-errCh:
+			close(jobs)
+			wg.Wait()
+			return err
+		}
+	}
+
+	close(jobs)
+	wg.Wait()
+
+	select {
+	case err := <-errCh:
+		return err
+	default:
+	}
+
+	return nil
+}
+
+func writeExtractedFiles(header *tar.Header, data []byte, dest string) error {
+	parts := strings.SplitN(header.Name, "/", 2)
+	if len(parts) < 2 {
+		return nil
+	}
+	target := filepath.Join(dest, parts[1])
+
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		return err
+	}
+
+	out, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	bw := bufio.NewWriterSize(out, 64*1024)
+	if _, err := bw.Write(data); err != nil {
+		return err
+	}
+	if err := bw.Flush(); err != nil {
+		return err
+	}
+
+	return os.Chmod(target, os.FileMode(header.Mode))
 }
