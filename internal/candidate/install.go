@@ -3,7 +3,6 @@ package candidate
 import (
 	"archive/tar"
 	"archive/zip"
-	"bufio"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -23,9 +22,9 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-type extractJob struct {
-	header *tar.Header
-	data   []byte
+type dirCache struct {
+	mu   sync.Mutex
+	dirs map[string]struct{}
 }
 
 func Install(sdk, version, url, checksum, binPath string) error {
@@ -48,13 +47,14 @@ func Install(sdk, version, url, checksum, binPath string) error {
 	fmt.Printf("Downloading %s %s. . .\n", sdk, version)
 	if err := download(url, tempFile); err != nil {
 		os.Remove(tempFile)
-		return fmt.Errorf("Download error: %w", err)
+		return fmt.Errorf("Download failed: %w", err)
 	}
 
 	if err := verifyChecksum(tempFile, checksum); err != nil {
 		os.Remove(tempFile)
-		return fmt.Errorf("Checksum verification failed: %w", err)
+		return fmt.Errorf("Checksun verification failed: %w", err)
 	}
+
 	fmt.Println("Checksum verified")
 
 	fmt.Println("Extracting . . .")
@@ -145,13 +145,6 @@ func resolveExt(url string) string {
 }
 
 func extract(src, destination string) error {
-	if strings.HasSuffix(src, ".tar.xz") {
-		if err := extractWithSystemTar(src, destination); err == nil {
-			return nil
-		}
-		fmt.Println("   System tar unavailable, falling back to built-in extractor - Slower option")
-	}
-
 	bar := progressbar.NewOptions(
 		-1,
 		progressbar.OptionSetDescription("   Extracting "),
@@ -174,26 +167,6 @@ func extract(src, destination string) error {
 	default:
 		return fmt.Errorf("Unsupported archive format: %s", src)
 	}
-}
-
-func extractWithSystemTar(src, dest string) error {
-	tarPath, err := exec.LookPath("tar")
-
-	if err != nil {
-		return fmt.Errorf("System tar not found: %w", err)
-	}
-
-	if err := os.MkdirAll(dest, 0755); err != nil {
-		return err
-	}
-
-	fmt.Println("   Extracting using system tar. . .")
-	cmd := exec.Command(tarPath, "-xf", src, "-C", dest, "--strip-components=1")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
-
 }
 
 func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
@@ -239,6 +212,23 @@ func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (cache *dirCache) Ensure(path string) error {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+
+	if _, exists := cache.dirs[path]; exists {
+		return nil
+	}
+
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return err
+	}
+
+	cache.dirs[path] = struct{}{}
 
 	return nil
 }
@@ -297,7 +287,6 @@ func extractTarGz(src, destination string, bar *progressbar.ProgressBar) error {
 				return err
 			}
 
-			// Keep the executable permissions.
 			os.Chmod(target, os.FileMode(header.Mode))
 		}
 	}
@@ -306,6 +295,31 @@ func extractTarGz(src, destination string, bar *progressbar.ProgressBar) error {
 }
 
 func extractTarXz(src, dest string, bar *progressbar.ProgressBar) error {
+	if err := extractWithSystem(src, dest); err == nil {
+		return nil
+	}
+
+	return extractTarXzGo(src, dest, bar)
+}
+
+func extractWithSystem(src, dest string) error {
+	tarPath, err := exec.LookPath("tar")
+	if err != nil {
+		return fmt.Errorf("System tar not found: %w", err)
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return err
+	}
+
+	cmd := exec.Command(tarPath, "-xf", src, "-C", dest, "--strip-components=1")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 	file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -319,107 +333,76 @@ func extractTarXz(src, dest string, bar *progressbar.ProgressBar) error {
 
 	tr := tar.NewReader(xzReader)
 
-	jobs := make(chan extractJob, 200)
-	errCh := make(chan error, 4)
-	var wg sync.WaitGroup
-
-	// We now make a worker pool, 4 goroutines writing files to disk concurrently
-	workers := 4
-
-	for range workers {
-		wg.Go(func() {
-			for job := range jobs {
-				if err := writeExtractedFiles(job.header, job.data, dest); err != nil {
-					select {
-					case errCh <- err:
-					default:
-					}
-				}
-			}
-		})
-	}
-
-	count := 0
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("tar read error: %w", err)
 		}
 
-		count++
-		if count%50 == 0 {
-			bar.Add(50)
+		// Clean the path
+		target := filepath.Join(dest, filepath.Clean(header.Name))
+		if !strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) {
+			return fmt.Errorf("invalid file path: %s", header.Name)
 		}
 
-		if header.Typeflag == tar.TypeDir {
-			parts := strings.SplitN(header.Name, "/", 2)
-			if len(parts) < 2 {
-				continue
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return err
 			}
-			target := filepath.Join(dest, parts[1])
-			os.MkdirAll(target, 0755)
+
+		case tar.TypeReg, tar.TypeRegA:
+			if err := extractFile(tr, target, header.Size); err != nil {
+				return err
+			}
+
+		// You can ignore symlinks for now or handle them
+		case tar.TypeSymlink:
+			// os.Symlink(header.Linkname, target) — but be careful on Windows
 			continue
 		}
-		if header.Typeflag != tar.TypeReg {
-			continue
+
+		// Progress update (coarser is fine and faster)
+		if bar != nil {
+			bar.Add(1) // or update every N files if too noisy
 		}
-
-		// We now read file content into memory, this must be sequential, since tr is a single sequential reader.
-		data := make([]byte, header.Size)
-		if _, err := io.ReadFull(tr, data); err != nil {
-			close(jobs)
-			wg.Wait()
-			return err
-		}
-
-		select {
-		case jobs <- extractJob{header: header, data: data}:
-		case err := <-errCh:
-			close(jobs)
-			wg.Wait()
-			return err
-		}
-	}
-
-	close(jobs)
-	wg.Wait()
-
-	select {
-	case err := <-errCh:
-		return err
-	default:
 	}
 
 	return nil
 }
 
-func writeExtractedFiles(header *tar.Header, data []byte, dest string) error {
-	parts := strings.SplitN(header.Name, "/", 2)
-	if len(parts) < 2 {
-		return nil
-	}
-	target := filepath.Join(dest, parts[1])
-
+// Extract one file directly from the reader to disk (no full buffering in RAM)
+func extractFile(tr *tar.Reader, target string, size int64) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}
 
-	out, err := os.Create(target)
+	f, err := os.OpenFile(target, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer f.Close()
 
-	bw := bufio.NewWriterSize(out, 64*1024)
-	if _, err := bw.Write(data); err != nil {
-		return err
-	}
-	if err := bw.Flush(); err != nil {
+	buf := make([]byte, (2*1024)*1024)
+	if _, err := io.CopyBuffer(f, tr, buf); err != nil {
 		return err
 	}
 
-	return os.Chmod(target, os.FileMode(header.Mode))
+	return nil
+}
+
+// A quality of life tool
+//
+// We still need to work on this function yet; fully optimize the extraction of .tar.xz files, then we work in this QoL feat.
+func getFileSize(path string) (int64, error) {
+	file, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+
+	size := file.Size()
+	return size, nil
 }
