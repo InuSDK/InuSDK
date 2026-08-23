@@ -47,12 +47,12 @@ func Install(sdk, version, url, checksum, binPath string) error {
 	fmt.Printf("Downloading %s %s. . .\n", sdk, version)
 	if err := download(url, tempFile); err != nil {
 		os.Remove(tempFile)
-		return fmt.Errorf("Download error: %w", err)
+		return fmt.Errorf("Download failed: %w", err)
 	}
 
 	if err := verifyChecksum(tempFile, checksum); err != nil {
 		os.Remove(tempFile)
-		return fmt.Errorf("Checksum verification failed: %w", err)
+		return fmt.Errorf("Checksun verification failed: %w", err)
 	}
 
 	fmt.Println("Checksum verified")
@@ -145,13 +145,6 @@ func resolveExt(url string) string {
 }
 
 func extract(src, destination string) error {
-	if strings.HasSuffix(src, ".tar.xz") {
-		if err := extractWithSystemTar(src, destination); err == nil {
-			return nil
-		}
-		fmt.Println("   System tar unavailable, falling back to built-in extractor - Slower option")
-	}
-
 	bar := progressbar.NewOptions(
 		-1,
 		progressbar.OptionSetDescription("   Extracting "),
@@ -174,26 +167,6 @@ func extract(src, destination string) error {
 	default:
 		return fmt.Errorf("Unsupported archive format: %s", src)
 	}
-}
-
-func extractWithSystemTar(src, dest string) error {
-	tarPath, err := exec.LookPath("tar")
-
-	if err != nil {
-		return fmt.Errorf("System tar not found: %w", err)
-	}
-
-	if err := os.MkdirAll(dest, 0755); err != nil {
-		return err
-	}
-
-	fmt.Println("   Extracting using system tar. . .")
-	cmd := exec.Command(tarPath, "-xf", src, "-C", dest, "--strip-components=1")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
-
 }
 
 func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
@@ -243,11 +216,11 @@ func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
 	return nil
 }
 
-func (c *dirCache) Ensure(path string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (cache *dirCache) Ensure(path string) error {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
 
-	if _, exists := c.dirs[path]; exists {
+	if _, exists := cache.dirs[path]; exists {
 		return nil
 	}
 
@@ -255,7 +228,7 @@ func (c *dirCache) Ensure(path string) error {
 		return err
 	}
 
-	c.dirs[path] = struct{}{}
+	cache.dirs[path] = struct{}{}
 
 	return nil
 }
@@ -314,7 +287,6 @@ func extractTarGz(src, destination string, bar *progressbar.ProgressBar) error {
 				return err
 			}
 
-			// Keep the executable permissions.
 			os.Chmod(target, os.FileMode(header.Mode))
 		}
 	}
@@ -361,27 +333,6 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 
 	tr := tar.NewReader(xzReader)
 
-	jobs := make(chan extractJob, 200)
-	errCh := make(chan error, 4)
-	var wg sync.WaitGroup
-
-	// We now make a worker pool, 4 goroutines writing files to disk concurrently
-	workers := 4
-
-	for range workers {
-		wg.Go(func() {
-			for job := range jobs {
-				if err := writeExtractedFiles(job.header, job.data, dest); err != nil {
-					select {
-					case errCh <- err:
-					default:
-					}
-				}
-			}
-		})
-	}
-
-	count := 0
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
@@ -391,7 +342,7 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 			return fmt.Errorf("tar read error: %w", err)
 		}
 
-		// Clean the path (important for security + correctness)
+		// Clean the path
 		target := filepath.Join(dest, filepath.Clean(header.Name))
 		if !strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) {
 			return fmt.Errorf("invalid file path: %s", header.Name)
