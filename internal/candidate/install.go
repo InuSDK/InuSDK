@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"os/exec"
 	"sync"
 
 	"fmt"
@@ -47,7 +48,12 @@ func Install(sdk, version, url, checksum, binPath string) error {
 	fmt.Printf("Downloading %s %s. . .\n", sdk, version)
 	if err := download(url, tempFile); err != nil {
 		os.Remove(tempFile)
-		return fmt.Errorf("Checksum mismatch: %w", err)
+		return fmt.Errorf("Download error: %w", err)
+	}
+
+	if err := verifyChecksum(tempFile, checksum); err != nil {
+		os.Remove(tempFile)
+		return fmt.Errorf("Checksum verification failed: %w", err)
 	}
 	fmt.Println("Checksum verified")
 
@@ -139,6 +145,13 @@ func resolveExt(url string) string {
 }
 
 func extract(src, destination string) error {
+	if strings.HasSuffix(src, ".tar.xz") {
+		if err := extractWithSystemTar(src, destination); err == nil {
+			return nil
+		}
+		fmt.Println("   System tar unavailable, falling back to built-in extractor - Slower option")
+	}
+
 	bar := progressbar.NewOptions(
 		-1,
 		progressbar.OptionSetDescription("   Extracting "),
@@ -161,6 +174,26 @@ func extract(src, destination string) error {
 	default:
 		return fmt.Errorf("Unsupported archive format: %s", src)
 	}
+}
+
+func extractWithSystemTar(src, dest string) error {
+	tarPath, err := exec.LookPath("tar")
+
+	if err != nil {
+		return fmt.Errorf("System tar not found: %w", err)
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return err
+	}
+
+	fmt.Println("   Extracting using system tar. . .")
+	cmd := exec.Command(tarPath, "-xf", src, "-C", dest, "--strip-components=1")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+
 }
 
 func extractZip(src, destination string, bar *progressbar.ProgressBar) error {
@@ -291,11 +324,10 @@ func extractTarXz(src, dest string, bar *progressbar.ProgressBar) error {
 	var wg sync.WaitGroup
 
 	// We now make a worker pool, 4 goroutines writing files to disk concurrently
-	workerCount := 4
-	for ind := 0; ind < workerCount; ind++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	workers := 4
+
+	for range workers {
+		wg.Go(func() {
 			for job := range jobs {
 				if err := writeExtractedFiles(job.header, job.data, dest); err != nil {
 					select {
@@ -304,7 +336,7 @@ func extractTarXz(src, dest string, bar *progressbar.ProgressBar) error {
 					}
 				}
 			}
-		}()
+		})
 	}
 
 	count := 0

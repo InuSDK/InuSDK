@@ -154,6 +154,7 @@ func listAvailableVersions(sdk string) {
 	}
 }
 
+// function used to list available SDKs.
 func listAvailableSDKs() {
 	buckets := bucket.GetBuckets()
 	if len(buckets) == 0 {
