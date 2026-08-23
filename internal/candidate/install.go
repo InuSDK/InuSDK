@@ -27,11 +27,6 @@ type dirCache struct {
 	dirs map[string]struct{}
 }
 
-type extractJob struct {
-	header *tar.Header
-	data   []byte
-}
-
 func Install(sdk, version, url, checksum, binPath string) error {
 	baseDir := viper.GetString("base_dir")
 	downloadsDir := filepath.Join(baseDir, "downloads")
