@@ -355,7 +355,7 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 			}
 
 		case tar.TypeReg:
-			if err := extractFile(tr, target, header.Size); err != nil {
+			if err := extractFile(tr, target); err != nil {
 				return err
 			}
 
@@ -373,7 +373,7 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 }
 
 // Extract one file directly from the reader to disk (no full buffering in RAM)
-func extractFile(tr *tar.Reader, target string, size int64) error {
+func extractFile(tr *tar.Reader, target string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}
