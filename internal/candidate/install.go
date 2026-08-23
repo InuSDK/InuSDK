@@ -355,19 +355,17 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 			}
 
 		case tar.TypeReg:
-			if err := extractFile(tr, target); err != nil {
+			if err := extractFile(tr, target, header.Size); err != nil {
 				return err
 			}
 
-		// You can ignore symlinks for now or handle them
 		case tar.TypeSymlink:
-			// os.Symlink(header.Linkname, target) — but be careful on Windows
 			continue
 		}
 
-		// Progress update (coarser is fine and faster)
+		// Progress update
 		if bar != nil {
-			bar.Add(1) // or update every N files if too noisy
+			bar.Add(1)
 		}
 	}
 
@@ -375,7 +373,7 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 }
 
 // Extract one file directly from the reader to disk (no full buffering in RAM)
-func extractFile(tr *tar.Reader, target string) error {
+func extractFile(tr *tar.Reader, target string, size int64) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}
