@@ -354,20 +354,18 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 				return err
 			}
 
-		case tar.TypeReg, tar.TypeRegA:
-			if err := extractFile(tr, target, header.Size); err != nil {
+		case tar.TypeReg:
+			if err := extractFile(tr, target); err != nil {
 				return err
 			}
 
-		// You can ignore symlinks for now or handle them
 		case tar.TypeSymlink:
-			// os.Symlink(header.Linkname, target) — but be careful on Windows
 			continue
 		}
 
-		// Progress update (coarser is fine and faster)
+		// Progress update
 		if bar != nil {
-			bar.Add(1) // or update every N files if too noisy
+			bar.Add(1)
 		}
 	}
 
@@ -375,7 +373,7 @@ func extractTarXzGo(src, dest string, bar *progressbar.ProgressBar) error {
 }
 
 // Extract one file directly from the reader to disk (no full buffering in RAM)
-func extractFile(tr *tar.Reader, target string, size int64) error {
+func extractFile(tr *tar.Reader, target string) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}
@@ -392,17 +390,4 @@ func extractFile(tr *tar.Reader, target string, size int64) error {
 	}
 
 	return nil
-}
-
-// A quality of life tool
-//
-// We still need to work on this function yet; fully optimize the extraction of .tar.xz files, then we work in this QoL feat.
-func getFileSize(path string) (int64, error) {
-	file, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-
-	size := file.Size()
-	return size, nil
 }
